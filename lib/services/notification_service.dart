@@ -2,6 +2,8 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'bible_service.dart';
+import 'bible_database_service.dart';
+import 'settings_service.dart';
 
 class NotificationService {
   static const String _keyEnabled = 'notification_verse_enabled';
@@ -13,7 +15,7 @@ class NotificationService {
   /// Inicializace — volat při startu appky
   static Future<void> initialize() async {
     await AwesomeNotifications().initialize(
-      null, // použije výchozí ikonu aplikace
+      null,
       [
         NotificationChannel(
           channelKey: _channelKey,
@@ -26,22 +28,46 @@ class NotificationService {
       ],
       debug: false,
     );
+
+    // Handler pro klik na notifikaci — otevře appku
+    await AwesomeNotifications().setListeners(
+      onActionReceivedMethod: onActionReceivedMethod,
+    );
+  }
+
+  @pragma('vm:entry-point')
+  static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+    // Appka se otevře automaticky při kliknutí na notifikaci
   }
 
   /// Požádej o oprávnění k notifikacím
   static Future<bool> requestPermission() async {
     final isAllowed = await AwesomeNotifications().isNotificationAllowed();
     if (isAllowed) return true;
-
     final granted = await AwesomeNotifications().requestPermissionToSendNotifications();
     return granted;
   }
 
+  /// Načti dnešní verš z aktivního překladu
+  static Future<String> _getTodayVerseText({required bool czech}) async {
+    try {
+      final settings = SettingsService();
+      final translation = await settings.getTranslation();
+      final bibleService = BibleService();
+      final verse = await bibleService.getDailyVerseFromTranslation(translation);
+      if (verse != null && verse.text.isNotEmpty) {
+        return '"${verse.text}" — ${verse.reference}';
+      }
+    } catch (_) {}
+    // Fallback
+    final verse = BibleService().getDailyVerseLocal(czech: czech);
+    return '"${verse.text}" — ${verse.reference}';
+  }
+
   /// Zobraz okamžitou testovací notifikaci
   static Future<void> showVerseNotification({required bool czech}) async {
-    final verse = BibleService().getDailyVerseLocal(czech: czech);
     final title = czech ? '✝️ Verš dne' : '✝️ Verse of the day';
-    final body = '"${verse.text}" — ${verse.reference}';
+    final body = await _getTodayVerseText(czech: czech);
 
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
@@ -50,6 +76,7 @@ class NotificationService {
         title: title,
         body: body,
         notificationLayout: NotificationLayout.BigText,
+        wakeUpScreen: true,
       ),
     );
   }
@@ -62,9 +89,8 @@ class NotificationService {
   }) async {
     await cancelVerseNotification();
 
-    final verse = BibleService().getDailyVerseLocal(czech: czech);
     final title = czech ? '✝️ Verš dne' : '✝️ Verse of the day';
-    final body = '"${verse.text}" — ${verse.reference}';
+    final body = await _getTodayVerseText(czech: czech);
 
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
@@ -73,12 +99,15 @@ class NotificationService {
         title: title,
         body: body,
         notificationLayout: NotificationLayout.BigText,
+        wakeUpScreen: true,
       ),
       schedule: NotificationCalendar(
         hour: hour,
         minute: minute,
         second: 0,
         repeats: true,
+        allowWhileIdle: true,
+        preciseAlarm: true,
       ),
     );
   }
