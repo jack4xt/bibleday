@@ -1,7 +1,6 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz_data;
 import 'bible_service.dart';
 
 class NotificationService {
@@ -9,16 +8,33 @@ class NotificationService {
   static const String _keyHour = 'notification_verse_hour';
   static const String _keyMinute = 'notification_verse_minute';
   static const int _verseNotificationId = 1;
+  static const String _channelKey = 'verse_of_day';
 
-  static final _plugin = FlutterLocalNotificationsPlugin();
-
+  /// Inicializace — volat při startu appky
   static Future<void> initialize() async {
-    tz_data.initializeTimeZones();
+    await AwesomeNotifications().initialize(
+      null, // použije výchozí ikonu aplikace
+      [
+        NotificationChannel(
+          channelKey: _channelKey,
+          channelName: 'Verš dne',
+          channelDescription: 'Denní verš z Bible',
+          defaultColor: const Color(0xFFFFD700),
+          importance: NotificationImportance.High,
+          channelShowBadge: true,
+        ),
+      ],
+      debug: false,
+    );
+  }
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: androidSettings);
+  /// Požádej o oprávnění k notifikacím
+  static Future<bool> requestPermission() async {
+    final isAllowed = await AwesomeNotifications().isNotificationAllowed();
+    if (isAllowed) return true;
 
-    await _plugin.initialize(settings);
+    final granted = await AwesomeNotifications().requestPermissionToSendNotifications();
+    return granted;
   }
 
   /// Zobraz okamžitou testovací notifikaci
@@ -27,19 +43,13 @@ class NotificationService {
     final title = czech ? '✝️ Verš dne' : '✝️ Verse of the day';
     final body = '"${verse.text}" — ${verse.reference}';
 
-    await _plugin.show(
-      _verseNotificationId,
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'verse_of_day',
-          czech ? 'Verš dne' : 'Verse of the day',
-          channelDescription: czech ? 'Denní verš z Bible' : 'Daily Bible verse',
-          importance: Importance.high,
-          priority: Priority.high,
-          styleInformation: BigTextStyleInformation(body),
-        ),
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: _verseNotificationId,
+        channelKey: _channelKey,
+        title: title,
+        body: body,
+        notificationLayout: NotificationLayout.BigText,
       ),
     );
   }
@@ -56,42 +66,25 @@ class NotificationService {
     final title = czech ? '✝️ Verš dne' : '✝️ Verse of the day';
     final body = '"${verse.text}" — ${verse.reference}';
 
-    tz_data.initializeTimeZones();
-
-    await _plugin.zonedSchedule(
-      _verseNotificationId,
-      title,
-      body,
-      _nextInstanceOfTime(hour, minute),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'verse_of_day',
-          czech ? 'Verš dne' : 'Verse of the day',
-          channelDescription: czech ? 'Denní verš z Bible' : 'Daily Bible verse',
-          importance: Importance.high,
-          priority: Priority.high,
-          styleInformation: BigTextStyleInformation(body),
-        ),
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: _verseNotificationId,
+        channelKey: _channelKey,
+        title: title,
+        body: body,
+        notificationLayout: NotificationLayout.BigText,
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      schedule: NotificationCalendar(
+        hour: hour,
+        minute: minute,
+        second: 0,
+        repeats: true,
+      ),
     );
   }
 
   static Future<void> cancelVerseNotification() async {
-    await _plugin.cancel(_verseNotificationId);
-  }
-
-  static tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-        tz.local, now.year, now.month, now.day, hour, minute);
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-    return scheduled;
+    await AwesomeNotifications().cancel(_verseNotificationId);
   }
 
   static Future<bool> isEnabled() async {
@@ -116,24 +109,5 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyHour, hour);
     await prefs.setInt(_keyMinute, minute);
-  }
-
-  static Future<bool> requestPermission() async {
-    try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      if (android == null) return true;
-
-      final areEnabled = await android.areNotificationsEnabled();
-      if (areEnabled == true) return true;
-
-      final granted = await android.requestNotificationsPermission();
-      if (granted == true) return true;
-
-      final enabledAfter = await android.areNotificationsEnabled();
-      return enabledAfter == true;
-    } catch (e) {
-      return true;
-    }
   }
 }
