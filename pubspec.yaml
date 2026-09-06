@@ -1,0 +1,58 @@
+name: bible_day
+description: BibleDay - Denní Bible studium s AI
+publish_to: 'none'
+version: 2.0.14+30
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # UI
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.0
+  cached_network_image: ^3.3.1
+
+  # Storage
+  shared_preferences: ^2.2.3
+
+  # HTTP
+  http: ^1.2.1
+
+  # Utils
+  package_info_plus: ^8.0.0
+  url_launcher: ^6.3.0
+  intl: ^0.20.2
+  share_plus: ^10.0.0
+  path_provider: ^2.1.4
+  flutter_tts: ^4.2.0
+  sqflite: ^2.3.3
+  sqflite_common_ffi: ^2.3.3
+  path: ^1.9.0
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.1
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/images/
+    - assets/bible/csp/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/icon.png"
+  min_sdk_android: 21

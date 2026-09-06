@@ -1,0 +1,149 @@
+final lang = _translationId == 'bkr' || _translationId == 'cep' ? 'cs' : 'en';import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../models/verse.dart';
+
+class AIService {
+  final AIProvider provider;
+  final String apiKey;
+
+  AIService({required this.provider, required this.apiKey});
+
+  Future<String?> getVerseReflection(Verse verse, String language) async {
+    final lang = language == 'cs' ? 'češtině' : 'English';
+    final prompt = language == 'cs'
+        ? 'Napiš krátké duchovní zamyšlení (4-6 vět) k tomuto biblickému verši v $lang. Buď hluboký, osobní a povzbudivý. Piš prostý text bez nadpisů, bez hvězdiček, bez markdownu.\n\nVerš: ${verse.reference} - "${verse.text}"'
+        : 'Write a short spiritual reflection (4-6 sentences) on this Bible verse in $lang. Be deep, personal and encouraging. Plain text only, no headings, no markdown.\n\nVerse: ${verse.reference} - "${verse.text}"';
+
+    return _sendRequest(prompt);
+  }
+
+  Future<String?> getChapterSummary(BibleChapter chapter, String language) async {
+    final lang = language == 'cs' ? 'češtině' : 'English';
+    final prompt = language == 'cs'
+        ? 'Napiš shrnutí a zamyšlení k této biblické kapitole v $lang. Piš prostý text bez nadpisů, bez hvězdiček, bez markdownu. Struktura: nejprve stručné shrnutí (3-4 věty), pak hlavní poselství (2-3 věty), pak praktická aplikace pro dnešní den (2-3 věty).\n\nKapitola: ${chapter.book} ${chapter.chapter}\n\n${chapter.fullText.substring(0, chapter.fullText.length.clamp(0, 3000))}'
+        : 'Write a summary and reflection on this Bible chapter in $lang. Plain text only, no headings, no markdown. Structure: brief summary (3-4 sentences), main message (2-3 sentences), practical application for today (2-3 sentences).\n\nChapter: ${chapter.book} ${chapter.chapter}\n\n${chapter.fullText.substring(0, chapter.fullText.length.clamp(0, 3000))}';
+
+    return _sendRequest(prompt);
+  }
+
+  Future<String?> getImagePrompt(Verse verse) async {
+    final prompt =
+        'Create a short image generation prompt (max 20 words) for a beautiful, spiritual, artistic illustration based on this Bible verse. Style: dramatic lighting, painterly, sacred art. No text, no markdown, no headings, just the prompt.\n\nVerse: ${verse.reference} - "${verse.text}"';
+    return _sendRequest(prompt);
+  }
+
+  // Čištění markdownu z AI odpovědi
+  String _cleanMarkdown(String text) {
+    return text
+        .replaceAll(RegExp(r'#{1,6}\s*'), '')
+        .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
+        .replaceAll(RegExp(r'\*(.*?)\*'), r'$1')
+        .replaceAll(RegExp(r'__(.*?)__'), r'$1')
+        .replaceAll(RegExp(r'_(.*?)_'), r'$1')
+        .replaceAll(RegExp(r'^\s*[-*+]\s+', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*\d+\.\s+', multiLine: true), '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+  }
+
+  Future<String?> _sendRequest(String prompt) async {
+    try {
+      String? result;
+      switch (provider.id) {
+        case 'anthropic':
+          result = await _sendAnthropic(prompt);
+          break;
+        case 'openai':
+          result = await _sendOpenAI(prompt);
+          break;
+        case 'gemini':
+          result = await _sendGemini(prompt);
+          break;
+        default:
+          return null;
+      }
+      return result != null ? _cleanMarkdown(result) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> _sendAnthropic(String prompt) async {
+    final response = await http.post(
+      Uri.parse(provider.baseUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: jsonEncode({
+        'model': provider.model,
+        'max_tokens': 1024,
+        'messages': [
+          {'role': 'user', 'content': prompt}
+        ],
+      }),
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['content'][0]['text'];
+    }
+    return null;
+  }
+
+  Future<String?> _sendOpenAI(String prompt) async {
+    final response = await http.post(
+      Uri.parse(provider.baseUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({
+        'model': provider.model,
+        'max_tokens': 1024,
+        'messages': [
+          {'role': 'user', 'content': prompt}
+        ],
+      }),
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['choices'][0]['message']['content'];
+    }
+    return null;
+  }
+
+  Future<String?> _sendGemini(String prompt) async {
+    final url = '${provider.baseUrl}/${provider.model}:generateContent?key=$apiKey';
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
+      }),
+    ).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['candidates'][0]['content']['parts'][0]['text'];
+    }
+    return null;
+  }
+
+  Future<bool> validateKey() async {
+    try {
+      final result = await _sendRequest('Reply with one word: OK');
+      return result != null && result.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+}

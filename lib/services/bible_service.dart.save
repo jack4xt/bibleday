@@ -1,0 +1,168 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../models/verse.dart';
+
+class BibleService {
+  static const String _baseUrl = 'https://bible-api.com';
+  static const String _getbibleUrl = 'https://api.getbible.net/v2';
+
+  static const List<Map<String, dynamic>> _localVerses = [
+    {'ref': 'Jan 3:16', 'text': 'Neboť Bůh tak miloval svět, že dal svého jednorozeneného Syna, aby žádný, kdo v něho věří, nezahynul, ale měl život věčný.', 'book': 'John', 'chapter': 3, 'verse': 16},
+    {'ref': 'Žalm 23:1', 'text': 'Hospodin je můj pastýř, nebudu mít nedostatek.', 'book': 'Psalms', 'chapter': 23, 'verse': 1},
+    {'ref': 'Filipským 4:13', 'text': 'Všechno mohu v Kristu, který mě posiluje.', 'book': 'Philippians', 'chapter': 4, 'verse': 13},
+    {'ref': 'Přísloví 3:5', 'text': 'Důvěřuj Hospodinu celým srdcem a nespoléhej na vlastní rozumnost.', 'book': 'Proverbs', 'chapter': 3, 'verse': 5},
+    {'ref': 'Izajáš 40:31', 'text': 'Ale ti, kdo čekají na Hospodina, nabývají nové síly; vznášejí se na křídlech jako orli.', 'book': 'Isaiah', 'chapter': 40, 'verse': 31},
+    {'ref': 'Jeremjáš 29:11', 'text': 'Neboť já znám záměry, které s vámi mám, praví Hospodin, záměry prospěchu, nikoli zla, abych vám dal budoucnost a naději.', 'book': 'Jeremiah', 'chapter': 29, 'verse': 11},
+    {'ref': 'Matouš 11:28', 'text': 'Pojďte ke mně všichni, kdo se namáháte a jste obtíženi, a já vám dám odpočinout.', 'book': 'Matthew', 'chapter': 11, 'verse': 28},
+    {'ref': 'Římanům 8:28', 'text': 'Víme, že těm, kdo milují Boha, všechny věci spolu působí k dobrému.', 'book': 'Romans', 'chapter': 8, 'verse': 28},
+    {'ref': 'Žalm 46:2', 'text': 'Bůh je naše útočiště a síla, pomoc v soužení vždy velmi osvědčená.', 'book': 'Psalms', 'chapter': 46, 'verse': 2},
+    {'ref': 'Galatským 5:22', 'text': 'Ovoce Ducha je láska, radost, pokoj, trpělivost, laskavost, dobrota, věrnost, tichost, sebeovládání.', 'book': 'Galatians', 'chapter': 5, 'verse': 22},
+    {'ref': 'Zjevení 21:4', 'text': 'A Bůh sám bude s nimi a setře jim každou slzu s očí. Smrt již nebude, ani žal ani nářek ani bolest už nebude.', 'book': 'Revelation', 'chapter': 21, 'verse': 4},
+    {'ref': '1. Korintským 13:4', 'text': 'Láska je trpělivá, laskavá, láska nezávidí, láska se nevychloubá, není domýšlivá.', 'book': '1 Corinthians', 'chapter': 13, 'verse': 4},
+    {'ref': 'Žalm 119:105', 'text': 'Tvé slovo je lampou mé noze a světlem mé stezky.', 'book': 'Psalms', 'chapter': 119, 'verse': 105},
+    {'ref': 'Matouš 5:9', 'text': 'Blahoslavení pokojní, neboť oni budou nazváni syny Božími.', 'book': 'Matthew', 'chapter': 5, 'verse': 9},
+  ];
+
+  Verse getDailyVerseLocal() {
+    final today = DateTime.now();
+    final index = (today.year + today.month + today.day) % _localVerses.length;
+    final data = _localVerses[index];
+    return Verse(
+      reference: data['ref'],
+      text: data['text'],
+      book: data['book'],
+      chapter: data['chapter'],
+      verseNumber: data['verse'],
+    );
+  }
+
+  Future<BibleChapter?> fetchChapter(String book, int chapter, String translation) async {
+    try {
+      String url;
+      bool isCzech = translation == 'bkr' || translation == 'cep';
+
+      if (isCzech) {
+        final bookIndex = books.indexWhere((b) => b['name'] == book) + 1;
+        url = '$_getbibleUrl/$translation/$bookIndex/$chapter.json';
+      } else {
+        final apiTranslation = _mapTranslation(translation);
+        final bookEncoded = Uri.encodeComponent(book);
+        url = '$_baseUrl/$bookEncoded+$chapter?translation=$apiTranslation';
+      }
+
+
+      final response = await http.get(Uri.parse(url)).timeout(
+        const Duration(seconds: 15),
+      );
+
+      
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        List<String> verses;
+
+        if (isCzech) {
+          final versesList = data['verses'] as List;
+          verses = versesList
+              .map((v) => v['text'].toString().trim())
+              .toList();
+        } else {
+          verses = (data['verses'] as List)
+              .map((v) => v['text'].toString().trim())
+              .toList();
+        }
+
+        print('DEBUG fetchChapter: loaded ${verses.length} verses');
+
+        return BibleChapter(
+          book: book,
+          chapter: chapter,
+          verses: verses,
+          translation: translation,
+        );
+      }
+    } catch (e) {
+      print('DEBUG fetchChapter ERROR: $e');
+      return null;
+    }
+    return null;
+  }
+
+  String _mapTranslation(String translation) {
+    switch (translation) {
+      case 'kjv': return 'kjv';
+      case 'web': return 'web';
+      case 'niv': return 'web';
+      default: return 'kjv';
+    }
+  }
+
+  static const List<Map<String, dynamic>> books = [
+    {'name': 'Genesis', 'cs': 'Genesis', 'chapters': 50},
+    {'name': 'Exodus', 'cs': 'Exodus', 'chapters': 40},
+    {'name': 'Leviticus', 'cs': 'Leviticus', 'chapters': 27},
+    {'name': 'Numbers', 'cs': 'Numeri', 'chapters': 36},
+    {'name': 'Deuteronomy', 'cs': 'Deuteronomium', 'chapters': 34},
+    {'name': 'Joshua', 'cs': 'Jozue', 'chapters': 24},
+    {'name': 'Judges', 'cs': 'Soudců', 'chapters': 21},
+    {'name': 'Ruth', 'cs': 'Rút', 'chapters': 4},
+    {'name': '1 Samuel', 'cs': '1. Samuelova', 'chapters': 31},
+    {'name': '2 Samuel', 'cs': '2. Samuelova', 'chapters': 24},
+    {'name': '1 Kings', 'cs': '1. Královská', 'chapters': 22},
+    {'name': '2 Kings', 'cs': '2. Královská', 'chapters': 25},
+    {'name': '1 Chronicles', 'cs': '1. Paralipomenon', 'chapters': 29},
+    {'name': '2 Chronicles', 'cs': '2. Paralipomenon', 'chapters': 36},
+    {'name': 'Ezra', 'cs': 'Ezdráš', 'chapters': 10},
+    {'name': 'Nehemiah', 'cs': 'Nehemiáš', 'chapters': 13},
+    {'name': 'Esther', 'cs': 'Ester', 'chapters': 10},
+    {'name': 'Job', 'cs': 'Job', 'chapters': 42},
+    {'name': 'Psalms', 'cs': 'Žalmy', 'chapters': 150},
+    {'name': 'Proverbs', 'cs': 'Přísloví', 'chapters': 31},
+    {'name': 'Ecclesiastes', 'cs': 'Kazatel', 'chapters': 12},
+    {'name': 'Song of Solomon', 'cs': 'Píseň písní', 'chapters': 8},
+    {'name': 'Isaiah', 'cs': 'Izajáš', 'chapters': 66},
+    {'name': 'Jeremiah', 'cs': 'Jeremjáš', 'chapters': 52},
+    {'name': 'Lamentations', 'cs': 'Pláč', 'chapters': 5},
+    {'name': 'Ezekiel', 'cs': 'Ezechiel', 'chapters': 48},
+    {'name': 'Daniel', 'cs': 'Daniel', 'chapters': 12},
+    {'name': 'Hosea', 'cs': 'Ozeáš', 'chapters': 14},
+    {'name': 'Joel', 'cs': 'Joel', 'chapters': 3},
+    {'name': 'Amos', 'cs': 'Ámos', 'chapters': 9},
+    {'name': 'Obadiah', 'cs': 'Abdijáš', 'chapters': 1},
+    {'name': 'Jonah', 'cs': 'Jonáš', 'chapters': 4},
+    {'name': 'Micah', 'cs': 'Micheáš', 'chapters': 7},
+    {'name': 'Nahum', 'cs': 'Nahum', 'chapters': 3},
+    {'name': 'Habakkuk', 'cs': 'Abakuk', 'chapters': 3},
+    {'name': 'Zephaniah', 'cs': 'Sofoniáš', 'chapters': 3},
+    {'name': 'Haggai', 'cs': 'Ageus', 'chapters': 2},
+    {'name': 'Zechariah', 'cs': 'Zacharjáš', 'chapters': 14},
+    {'name': 'Malachi', 'cs': 'Malachiáš', 'chapters': 4},
+    {'name': 'Matthew', 'cs': 'Matouš', 'chapters': 28},
+    {'name': 'Mark', 'cs': 'Marek', 'chapters': 16},
+    {'name': 'Luke', 'cs': 'Lukáš', 'chapters': 24},
+    {'name': 'John', 'cs': 'Jan', 'chapters': 21},
+    {'name': 'Acts', 'cs': 'Skutky', 'chapters': 28},
+    {'name': 'Romans', 'cs': 'Římanům', 'chapters': 16},
+    {'name': '1 Corinthians', 'cs': '1. Korintským', 'chapters': 16},
+    {'name': '2 Corinthians', 'cs': '2. Korintským', 'chapters': 13},
+    {'name': 'Galatians', 'cs': 'Galatským', 'chapters': 6},
+    {'name': 'Ephesians', 'cs': 'Efezským', 'chapters': 6},
+    {'name': 'Philippians', 'cs': 'Filipským', 'chapters': 4},
+    {'name': 'Colossians', 'cs': 'Koloským', 'chapters': 4},
+    {'name': '1 Thessalonians', 'cs': '1. Tesalonickým', 'chapters': 5},
+    {'name': '2 Thessalonians', 'cs': '2. Tesalonickým', 'chapters': 3},
+    {'name': '1 Timothy', 'cs': '1. Timoteovi', 'chapters': 6},
+    {'name': '2 Timothy', 'cs': '2. Timoteovi', 'chapters': 4},
+    {'name': 'Titus', 'cs': 'Titovi', 'chapters': 3},
+    {'name': 'Philemon', 'cs': 'Filemonovi', 'chapters': 1},
+    {'name': 'Hebrews', 'cs': 'Židům', 'chapters': 13},
+    {'name': 'James', 'cs': 'Jakubův', 'chapters': 5},
+    {'name': '1 Peter', 'cs': '1. Petrův', 'chapters': 5},
+    {'name': '2 Peter', 'cs': '2. Petrův', 'chapters': 3},
+    {'name': '1 John', 'cs': '1. Janův', 'chapters': 5},
+    {'name': '2 John', 'cs': '2. Janův', 'chapters': 1},
+    {'name': '3 John', 'cs': '3. Janův', 'chapters': 1},
+    {'name': 'Jude', 'cs': 'Judův', 'chapters': 1},
+    {'name': 'Revelation', 'cs': 'Zjevení', 'chapters': 22},
+  ];
+}

@@ -1,0 +1,289 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../services/settings_service.dart';
+import '../../theme/app_theme.dart';
+
+class OnboardingScreen extends StatefulWidget {
+  final VoidCallback onDone;
+  const OnboardingScreen({super.key, required this.onDone});
+
+  @override
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final PageController _controller = PageController();
+  final _settings = SettingsService();
+  final _apiKeyController = TextEditingController();
+  int _currentPage = 0;
+  String _selectedProvider = 'anthropic';
+
+  final List<Map<String, dynamic>> _pages = [
+    {
+      'icon': '✝️',
+      'title': 'Vítej v BibleDay',
+      'subtitle': 'Denní studium Písma\ns pomocí AI',
+      'body':
+          'BibleDay ti každý den přinese verš, zamyšlení, studium kapitoly a duchovní obraz. Funguje i bez AI — ale s ní je to teprve zážitek.',
+    },
+    {
+      'icon': '📖',
+      'title': 'Co tě čeká',
+      'subtitle': 'Tři sekce, jeden cíl',
+      'body':
+          '☀️ Verš dne — každý den jiný verš s AI zamyšlením\n\n📚 Studium — vyber si kapitolu, AI ti ji shrne\n\n🎨 Obraz dne — AI vygeneruje duchovní ilustraci',
+    },
+    {
+      'icon': '🔑',
+      'title': 'API klíč (volitelné)',
+      'subtitle': 'Pro plnou AI funkci',
+      'body':
+          'Bez klíče app funguje s lokálními verši. S klíčem odemkneš AI zamyšlení a shrnutí kapitol.\n\nKlíč je uložen pouze v tvém telefonu.',
+    },
+  ];
+
+  void _nextPage() {
+    if (_currentPage < _pages.length - 1) {
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  Future<void> _finish() async {
+    if (_apiKeyController.text.isNotEmpty) {
+      await _settings.setApiKey(_apiKeyController.text.trim());
+      await _settings.setProviderId(_selectedProvider);
+    }
+    await _settings.setOnboardingDone();
+    widget.onDone();
+  }
+
+  Future<void> _openApiUrl() async {
+    final urls = {
+      'anthropic': 'https://console.anthropic.com/settings/keys',
+      'openai': 'https://platform.openai.com/api-keys',
+      'gemini': 'https://aistudio.google.com/app/apikey',
+    };
+    final url = urls[_selectedProvider]!;
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Progress dots
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_pages.length, (i) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: i == _currentPage ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: i == _currentPage
+                          ? AppTheme.neonGold
+                          : AppTheme.divider,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            // Pages
+            Expanded(
+              child: PageView.builder(
+                controller: _controller,
+                onPageChanged: (i) => setState(() => _currentPage = i),
+                itemCount: _pages.length,
+                itemBuilder: (context, index) {
+                  final page = _pages[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          page['icon'],
+                          style: const TextStyle(fontSize: 64),
+                        ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
+                        const SizedBox(height: 24),
+                        Text(
+                          page['title'],
+                          style: Theme.of(context).textTheme.displayMedium,
+                          textAlign: TextAlign.center,
+                        ).animate().fadeIn(delay: 200.ms),
+                        const SizedBox(height: 8),
+                        Text(
+                          page['subtitle'],
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.neonPurple,
+                              ),
+                          textAlign: TextAlign.center,
+                        ).animate().fadeIn(delay: 300.ms),
+                        const SizedBox(height: 24),
+                        Text(
+                          page['body'],
+                          style: Theme.of(context).textTheme.bodyLarge,
+                          textAlign: TextAlign.center,
+                        ).animate().fadeIn(delay: 400.ms),
+
+                        // API klíč na poslední stránce
+                        if (index == 2) ...[
+                          const SizedBox(height: 32),
+                          // Provider výběr
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppTheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.divider),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedProvider,
+                                isExpanded: true,
+                                dropdownColor: AppTheme.surfaceElevated,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                items: [
+                                  {'id': 'anthropic', 'name': 'Claude (Anthropic) — doporučeno'},
+                                  {'id': 'openai', 'name': 'GPT-4 (OpenAI)'},
+                                  {'id': 'gemini', 'name': 'Gemini (Google)'},
+                                ].map((p) => DropdownMenuItem(
+                                      value: p['id'],
+                                      child: Text(
+                                        p['name']!,
+                                        style: GoogleFonts.crimsonText(
+                                          color: AppTheme.textPrimary,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    )).toList(),
+                                onChanged: (v) =>
+                                    setState(() => _selectedProvider = v!),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // API klíč input
+                          TextField(
+                            controller: _apiKeyController,
+                            obscureText: true,
+                            style: GoogleFonts.crimsonText(
+                              color: AppTheme.textPrimary,
+                              fontSize: 16,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Vlož API klíč...',
+                              hintStyle: GoogleFonts.crimsonText(
+                                color: AppTheme.textSecondary,
+                              ),
+                              filled: true,
+                              fillColor: AppTheme.surface,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppTheme.divider),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppTheme.divider),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppTheme.neonGold),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton.icon(
+                            onPressed: _openApiUrl,
+                            icon: const Icon(Icons.open_in_new,
+                                color: AppTheme.neonPurple, size: 16),
+                            label: Text(
+                              'Jak získat API klíč?',
+                              style: GoogleFonts.cinzel(
+                                color: AppTheme.neonPurple,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Tlačítka
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Row(
+                children: [
+                  if (_currentPage == _pages.length - 1)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _finish,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppTheme.divider),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Přeskočit',
+                          style: GoogleFonts.cinzel(
+                            color: AppTheme.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_currentPage == _pages.length - 1)
+                    const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _currentPage < _pages.length - 1
+                          ? _nextPage
+                          : _finish,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.neonGold,
+                        foregroundColor: AppTheme.background,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        _currentPage < _pages.length - 1
+                            ? 'Další'
+                            : 'Začít studovat',
+                        style: GoogleFonts.cinzel(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

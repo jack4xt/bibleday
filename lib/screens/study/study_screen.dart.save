@@ -1,0 +1,763 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../models/verse.dart';
+import '../../services/bible_service.dart';
+import '../../services/ai_service.dart';
+import '../../services/settings_service.dart';
+import '../../services/bookmarks_service.dart';
+import '../../theme/app_theme.dart';
+import '../../services/cache_service.dart';
+import 'reading_plan_screen.dart';
+
+class StudyScreen extends StatefulWidget {
+  const StudyScreen({super.key});
+
+  @override
+  State<StudyScreen> createState() => _StudyScreenState();
+}
+
+class _StudyScreenState extends State<StudyScreen>
+    with SingleTickerProviderStateMixin {
+  final _bibleService = BibleService();
+  final _settings = SettingsService();
+  final _bookmarks = BookmarksService();
+  final _cache = CacheService();
+
+  late TabController _tabController;
+
+  BibleChapter? _chapter;
+  StructuredStudy? _structuredStudy;
+  bool _loadingChapter = false;
+  bool _loadingStudy = false;
+  bool _hasApiKey = false;
+  String _translationId = 'kjv';
+  Set<int> _bookmarkedVerses = {};
+
+  String _selectedBook = 'John';
+  int _selectedChapter = 1;
+  int _maxChapters = 21;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+
+  Future<void> _load() async {
+    final hasKey = await _settings.hasApiKey();
+    final translation = await _settings.getTranslation();
+    final current = await _settings.getCurrentChapter();
+
+    final newTranslation = translation;
+    final newBook = current['book'] as String;
+    final newChapter = current['chapter'] as int;
+
+    if (_translationId != newTranslation ||
+        _selectedBook != newBook ||
+        _selectedChapter != newChapter ||
+        _chapter == null) {
+      setState(() {
+        _hasApiKey = hasKey;
+        _translationId = newTranslation;
+        _selectedBook = newBook;
+        _selectedChapter = newChapter;
+        _maxChapters = _getMaxChapters(newBook);
+      });
+      _fetchChapter();
+    }
+  }
+
+  int _getMaxChapters(String book) {
+    final found = BibleService.books.firstWhere(
+      (b) => b['name'] == book,
+      orElse: () => {'chapters': 1},
+    );
+    return found['chapters'] as int;
+  }
+
+  String _getCsName(String book) {
+    final found = BibleService.books.firstWhere(
+      (b) => b['name'] == book,
+      orElse: () => {'cs': book},
+    );
+    return found['cs'] as String;
+  }
+
+  Future<void> _fetchChapter() async {
+    setState(() {
+      _loadingChapter = true;
+      _chapter = null;
+      _structuredStudy = null;
+      _bookmarkedVerses = {};
+    });
+
+    final chapter = await _bibleService.fetchChapter(
+      _selectedBook,
+      _selectedChapter,
+      _translationId,
+    );
+
+    setState(() {
+      _chapter = chapter;
+      _loadingChapter = false;
+    });
+
+    await _settings.setCurrentChapter(_selectedBook, _selectedChapter);
+
+    if (chapter != null && _hasApiKey) {
+      _fetchStructuredStudy(chapter);
+    }
+  }
+
+  Future<void> _fetchStructuredStudy(BibleChapter chapter) async {
+    setState(() => _loadingStudy = true);
+    final lang = _translationId == 'bkr' || _translationId == 'cep' ? 'cs' : 'en';
+
+    // Zkus načíst z cache
+    final cached = await _cache.getStudy(_selectedBook, _selectedChapter, _translationId);
+    if (cached != null) {
+      List<StudyQuestion>? questions;
+      if (cached['questions'] != null) {
+        final parts = cached['questions']!.split('|||').where((s) => s.isNotEmpty).toList();
+        questions = [];
+        for (final part in parts) {
+          final idx = part.indexOf(':::');
+          if (idx != -1) {
+            questions.add(StudyQuestion(
+              question: part.substring(0, idx),
+              answer: part.substring(idx + 3),
+            ));
+          }
+        }
+      }
+      final study = StructuredStudy(
+        context: cached['context'],
+        keyVerses: cached['keyVerses'] != null
+            ? cached['keyVerses']!.split('|||').where((s) => s.isNotEmpty).toList()
+            : null,
+        questions: questions,
+        application: cached['application'],
+      );
+      setState(() {
+        _structuredStudy = study;
+        _loadingStudy = false;
+      });
+      return;
+    }
+
+    // Načti z AI
+    final provider = await _settings.getProvider();
+    final apiKey = await _settings.getApiKey();
+    final ai = AIService(provider: provider, apiKey: apiKey!);
+    final study = await ai.getStructuredStudy(chapter, lang);
+
+    // Ulož do cache
+    if (study != null) {
+      await _cache.setStudy(
+        _selectedBook, _selectedChapter, _translationId,
+        context: study.context,
+        keyVerses: study.keyVerses?.join('|||'),
+        questions: study.questions?.map((q) => '\${q.question}:::\${q.answer}').join('|||'),
+        application: study.application,
+      );
+    }
+
+    setState(() {
+      _structuredStudy = study;
+      _loadingStudy = false;
+    });
+  }
+
+  Future<void> _toggleBookmark(int verseIndex) async {
+    if (_chapter == null) return;
+    final verseText = _chapter!.verses[verseIndex];
+    final reference = '${_getCsName(_selectedBook)} $_selectedChapter:${verseIndex + 1}';
+    final verse = Verse(
+      reference: reference,
+      text: verseText,
+      book: _selectedBook,
+      chapter: _selectedChapter,
+      verseNumber: verseIndex + 1,
+    );
+
+    if (_bookmarkedVerses.contains(verseIndex)) {
+      await _bookmarks.removeBookmark(verse);
+      setState(() => _bookmarkedVerses.remove(verseIndex));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Záložka odebrána',
+                style: GoogleFonts.cinzel(color: AppTheme.background)),
+            backgroundColor: AppTheme.textSecondary,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } else {
+      await _bookmarks.addBookmark(verse);
+      setState(() => _bookmarkedVerses.add(verseIndex));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Verš uložen do záložek ✓',
+                style: GoogleFonts.cinzel(color: AppTheme.background)),
+            backgroundColor: AppTheme.neonGold,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _navigateToChapter(String book, int chapter) {
+    setState(() {
+      _selectedBook = book;
+      _selectedChapter = chapter;
+      _maxChapters = _getMaxChapters(book);
+    });
+    _tabController.animateTo(0);
+    _fetchChapter();
+  }
+
+  void _showBookPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppTheme.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text('Vyber knihu',
+                style: Theme.of(context).textTheme.displayMedium),
+          ),
+          
+              itemCount: BibleService.books.length,
+              itemBuilder: (context, index) {
+                final book = BibleService.books[index];
+                final isSelected = book['name'] == _selectedBook;
+                return ListTile(
+                  title: Text(
+                    book['cs'] as String,
+                    style: GoogleFonts.crimsonText(
+                      color: isSelected ? AppTheme.neonGold : AppTheme.textPrimary,
+                      //fontSize: 18,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check, color: AppTheme.neonGold)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      _selectedBook = book['name'] as String;
+                      _selectedChapter = 1;
+                      _maxChapters = book['chapters'] as int;
+                    });
+                    Navigator.pop(context);
+                    _fetchChapter();
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Studium Bible'),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppTheme.neonGold,
+          labelColor: AppTheme.neonGold,
+          unselectedLabelColor: AppTheme.textSecondary,
+          labelStyle: GoogleFonts.cinzel(fontSize: 13, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: GoogleFonts.cinzel(fontSize: 13),
+          tabs: const [
+            Tab(text: 'ČTENÍ'),
+            Tab(text: 'PLÁN'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildReadingTab(),
+          ReadingPlanScreen(onNavigateToChapter: _navigateToChapter),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadingTab() {
+    return Column(
+      children: [
+        // Selector
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: AppTheme.surface,
+          child: Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: GestureDetector(
+                  onTap: _showBookPicker,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.neonGold.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _getCsName(_selectedBook),
+                            style: GoogleFonts.cinzel(color: AppTheme.neonGold, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down, color: AppTheme.neonGold),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceElevated,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.divider),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _selectedChapter,
+                      dropdownColor: AppTheme.surfaceElevated,
+                      isExpanded: true,
+                      items: List.generate(
+                        _maxChapters,
+                        (i) => DropdownMenuItem(
+                          value: i + 1,
+                          child: Text('Kap. ${i + 1}',
+                              style: GoogleFonts.cinzel(color: AppTheme.textPrimary, fontSize: 13)),
+                        ),
+                      ),
+                      onChanged: (v) {
+                        setState(() => _selectedChapter = v!);
+                        _fetchChapter();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Obsah
+        Expanded(
+          child: _loadingChapter
+              ? const Center(child: CircularProgressIndicator(color: AppTheme.neonGold))
+              : _chapter == null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.wifi_off, color: AppTheme.textSecondary, size: 48),
+                          const SizedBox(height: 16),
+                          Text('Nepodařilo se načíst kapitolu',
+                              style: Theme.of(context).textTheme.bodyMedium),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: _fetchChapter,
+                            child: Text('Zkusit znovu',
+                                style: GoogleFonts.cinzel(color: AppTheme.neonGold)),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${_getCsName(_selectedBook)} $_selectedChapter',
+                              style: Theme.of(context).textTheme.displayMedium)
+                              .animate().fadeIn(),
+                          const SizedBox(height: 4),
+                          Text(_translationId.toUpperCase(),
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: AppTheme.neonGold)),
+                          const SizedBox(height: 24),
+
+                          // Verše
+                          ..._chapter!.verses.asMap().entries.map((e) {
+                            final isBookmarked = _bookmarkedVerses.contains(e.key);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    RichText(
+                                     textScaler: MediaQuery.textScalerOf(context),
+                                     text: TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: '${e.key + 1}  ',
+                                            style: GoogleFonts.cinzel(
+                                              color: AppTheme.neonGold,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: e.value,
+                                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              fontFamily: GoogleFonts.crimsonText().fontFamily,
+                                              height: 1.7,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () => _toggleBookmark(e.key),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 8, top: 2),
+                                      child: Icon(
+                                        isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
+                                        color: isBookmarked ? AppTheme.neonGold : AppTheme.textSecondary,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ).animate().fadeIn(delay: Duration(milliseconds: e.key * 20));
+                          }),
+
+                          const SizedBox(height: 32),
+                          const Divider(color: AppTheme.divider),
+                          const SizedBox(height: 24),
+
+                          // Strukturované studium
+                          Row(
+                            children: [
+                              const Icon(Icons.auto_awesome, color: AppTheme.neonPurple, size: 16),
+                              const SizedBox(width: 8),
+                              Text('STUDIUM KAPITOLY',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(color: AppTheme.neonPurple)),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          if (!_hasApiKey)
+                            _buildNoApiCard(context)
+                          else if (_loadingStudy)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(32),
+                                child: Column(
+                                  children: [
+                                    CircularProgressIndicator(color: AppTheme.neonPurple),
+                                    SizedBox(height: 12),
+                                    Text('Studuji kapitolu...',
+                                        style: TextStyle(color: AppTheme.textSecondary)),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else if (_structuredStudy == null)
+                            Center(
+                              child: TextButton(
+                                onPressed: () => _fetchStructuredStudy(_chapter!),
+                                child: Text('Načíst studium',
+                                    style: GoogleFonts.cinzel(color: AppTheme.neonGold)),
+                              ),
+                            )
+                          else
+                            _buildStructuredStudy(context, _structuredStudy!),
+
+                          const SizedBox(height: 32),
+                        ],
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStructuredStudy(BuildContext context, StructuredStudy study) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Kontext
+        if (study.context != null) ...[
+          _buildStudySection(
+            context,
+            icon: '📜',
+            title: 'KONTEXT',
+            child: Text(study.context!,
+                style: Theme.of(context).textTheme.bodyLarge),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Klíčové verše
+        if (study.keyVerses != null && study.keyVerses!.isNotEmpty) ...[
+          _buildStudySection(
+            context,
+            icon: '💡',
+            title: 'KLÍČOVÉ VERŠE',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: study.keyVerses!.map((v) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('✦  ', style: GoogleFonts.cinzel(
+                        color: AppTheme.neonGold, fontSize: 12)),
+                    Expanded(
+                      child: Text(v,
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontStyle: FontStyle.italic)),
+                    ),
+                  ],
+                ),
+              )).toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Otázky k zamyšlení
+        if (study.questions != null && study.questions!.isNotEmpty) ...[
+          _buildStudySection(
+            context,
+            icon: '❓',
+            title: 'OTÁZKY K ZAMYŠLENÍ',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: study.questions!.asMap().entries.map((e) =>
+                QuestionItem(
+                  index: e.key + 1,
+                  question: e.value,
+                ),
+              ).toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Praktická aplikace
+        if (study.application != null) ...[
+          _buildStudySection(
+            context,
+            icon: '🎯',
+            title: 'PRAKTICKÁ APLIKACE',
+            child: Text(study.application!,
+                style: Theme.of(context).textTheme.bodyLarge),
+            borderColor: AppTheme.neonGold.withOpacity(0.3),
+          ),
+        ],
+      ],
+    ).animate().fadeIn();
+  }
+
+  Widget _buildStudySection(
+    BuildContext context, {
+    required String icon,
+    required String title,
+    required Widget child,
+    Color? borderColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor ?? AppTheme.neonPurple.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(color: AppTheme.neonPurple, letterSpacing: 1.5)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoApiCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.lock_outline, color: AppTheme.neonGold, size: 32),
+          const SizedBox(height: 12),
+          Text('Studium vyžaduje API klíč',
+              style: Theme.of(context).textTheme.headlineMedium,
+              textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text('Přejdi do Nastavení a zadej svůj API klíč.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
+class QuestionItem extends StatefulWidget {
+  final int index;
+  final StudyQuestion question;
+
+  const QuestionItem({super.key, required this.index, required this.question});
+
+  @override
+  State<QuestionItem> createState() => _QuestionItemState();
+}
+
+class _QuestionItemState extends State<QuestionItem> {
+  bool _showAnswer = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                margin: const EdgeInsets.only(right: 12, top: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.neonPurple.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.neonPurple.withOpacity(0.4)),
+                ),
+                child: Center(
+                  child: Text(
+                    '${widget.index}',
+                    style: GoogleFonts.cinzel(
+                      color: AppTheme.neonPurple,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  widget.question.question,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => setState(() => _showAnswer = !_showAnswer),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: _showAnswer
+                    ? AppTheme.neonGold.withOpacity(0.08)
+                    : AppTheme.surfaceElevated,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _showAnswer
+                      ? AppTheme.neonGold.withOpacity(0.3)
+                      : AppTheme.divider,
+                ),
+              ),
+              child: _showAnswer
+                  ? Text(
+                      widget.question.answer,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontFamily: GoogleFonts.crimsonText().fontFamily,
+                        height: 1.6,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.lightbulb_outline,
+                            color: AppTheme.textSecondary, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Zobrazit odpověď',
+                          style: GoogleFonts.cinzel(
+                            color: AppTheme.textSecondary,
+                            fontSize: 11,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
