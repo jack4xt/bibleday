@@ -80,51 +80,42 @@ class BackupService {
       return false;
     }
   }
-
-  /// Automatický export — ukládá přímo do pevné složky na úložišti,
-  /// bez dialogu (běží na pozadí). Udržuje max. _maxAutoBackups souborů.
   Future<bool> runAutoBackup() async {
     try {
       final dir = await _autoBackupDir();
       if (dir == null) return false;
-
-      final backup = await _collectData();
-      final json = const JsonEncoder.withIndent('  ').convert(backup);
-      final filename = _filenameFor(DateTime.now());
+      final data = await _collectData();
+      final jsonStr = jsonEncode(data);
+      final now = DateTime.now();
+      final filename = _filenameFor(now);
       final file = File('${dir.path}/$filename');
-      await file.writeAsString(json);
-
+      await file.writeAsString(jsonStr);
       await _pruneOldBackups(dir);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyLastAutoBackup, DateTime.now().toIso8601String());
-
       return true;
     } catch (e) {
       return false;
     }
   }
 
+  /// Automatický export — ukládá přímo do pevné složky na úložišti,
+  /// bez dialogu (běží na pozadí). Udržuje max. _maxAutoBackups souborů.
   Future<Directory?> _autoBackupDir() async {
     try {
-      // Použij složku specifickou pro appku na externím úložišti
-      // — funguje na všech zařízeních bez ohledu na jazyk systému
-      final base = await getExternalStorageDirectory();
-      if (base != null) {
+      final docsDir = Directory('/storage/emulated/0/Documents/BibleDay_AutoBackup');
+      if (!docsDir.existsSync()) {
+        docsDir.createSync(recursive: true);
+      }
+      return docsDir;
+    } catch (e) {
+      try {
+        final base = await getExternalStorageDirectory();
+        if (base == null) return null;
         final dir = Directory('${base.path}/AutoBackup');
         if (!dir.existsSync()) dir.createSync(recursive: true);
         return dir;
+      } catch (_) {
+        return null;
       }
-    } catch (_) {}
-
-    // Fallback na interní úložiště appky
-    try {
-      final base = await getApplicationDocumentsDirectory();
-      final dir = Directory('${base.path}/AutoBackup');
-      if (!dir.existsSync()) dir.createSync(recursive: true);
-      return dir;
-    } catch (_) {
-      return null;
     }
   }
 
