@@ -679,6 +679,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final locale = Localizations.localeOf(context);
+                          await NotificationService.showVerseNotification(
+                            czech: locale.languageCode == 'cs',
+                          );
+                        },
+                        icon: Icon(Icons.notifications_active_outlined,
+                            color: AppTheme.goldColor(context)),
+                        label: Text('Otestovat notifikaci',
+                            style: GoogleFonts.cinzel(color: AppTheme.goldColor(context))),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: AppTheme.goldColor(context)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
                   ],
                 ],
               ),
