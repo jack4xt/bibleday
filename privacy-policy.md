@@ -24,7 +24,7 @@ The Czech Study Bible (ČSP) is included with permission from Nadační fond př
 
 ## Contact
 
-If you have any questions, contact us at: jack4xt@gmail.com
+If you have any questions, contact us at: postmaster@jack4xt.cz
 
 ## Changes
 
