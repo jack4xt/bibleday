@@ -181,10 +181,10 @@
   "apiKeyGuide": "Jak získat API klíč?",
   "apiKeyGuideIntro": "API klíč slouží k propojení BibleDay s umělou inteligencí Claude. Získáš ho zdarma na webu Anthropic.",
   "apiKeyStep1": "Otevři console.anthropic.com (tlačítko níže)",
-  "apiKeyStep2": "Zaregistruj se nebo přihlas pomocí e-mailu",
-  "apiKeyStep3": "V levém menu klikni na \"API Keys\"",
-  "apiKeyStep4": "Klikni na \"Create Key\" a pojmenuj ho (např. BibleDay)",
-  "apiKeyStep5": "Zkopíruj klíč (začíná \"sk-ant-...\") a vlož ho do BibleDay",
+  "apiKeyStep2": "Zaregistruj se pomocí e-mailu nebo Google účtu.",
+  "apiKeyStep3": "Vyber kredit (5 USD). Vyplň jméno a adresu, poté údaje platební karty. Klikni na \"Buy Credits\".",
+  "apiKeyStep4": "Na další stránce přeskoč automatické dobíjení tlačítkem \"Skip for now\".",
+  "apiKeyStep5": "Vpravo nahoře klikni na \"Get API Key\".",
   "apiKeyGuideTip": "💡 Tip: Vlož 5 USD kredit pro začátek — vydrží na více než 4 roky denního studia!",
   "apiKeyOpenConsole": "Otevřít Anthropic",
   "shareVerse": "Sdílet verš",
@@ -201,5 +201,5 @@
   "assistantHint": "Napiš svou otázku...",
   "ttsInfoTitle": "Čtení Bible",
   "ttsInfoDesc": "Kvalita českého hlasu závisí na TTS enginu vašeho telefonu.",
-  "apiKeyStep6": "Klikni na Create Key, pojmenuj ho BibleDay a zkopíruj klíč."
+  "apiKeyStep6": "Klikni na \"Create Key\", pojmenuj ho BibleDay a zkopíruj klíč začínající \"sk-ant-...\"."
 }

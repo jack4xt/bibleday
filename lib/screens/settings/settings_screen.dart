@@ -160,6 +160,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 
 
+  void _showApiKeyGuide(AppLocalizations l) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceElevatedColor(context),
+        title: Text(l.apiKeyGuide, style: GoogleFonts.cinzel(color: AppTheme.goldColor(context))),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l.apiKeyGuideIntro, style: GoogleFonts.crimsonText(color: AppTheme.textPrimaryColor(context), fontSize: 15, height: 1.5)),
+              const SizedBox(height: 16),
+              _guideStep('1', l.apiKeyStep1),
+              _guideStep('2', l.apiKeyStep2),
+              _guideStep('3', l.apiKeyStep3),
+              _guideStep('4', l.apiKeyStep4),
+              _guideStep('5', l.apiKeyStep5),
+              _guideStep('6', l.apiKeyStep6),
+              const SizedBox(height: 12),
+              Text(l.apiKeyGuideTip, style: GoogleFonts.crimsonText(color: AppTheme.goldColor(context), fontSize: 13, fontStyle: FontStyle.italic, height: 1.4)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK', style: GoogleFonts.cinzel(color: AppTheme.textSecondaryColor(context)))),
+          ElevatedButton(
+            onPressed: () { Navigator.pop(ctx); _openApiUrl(); },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldColor(context), foregroundColor: AppTheme.backgroundColorOf(context)),
+            child: Text(l.apiKeyOpenConsole, style: GoogleFonts.cinzel(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guideStep(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24, height: 24,
+            decoration: BoxDecoration(color: AppTheme.goldColor(context).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.goldColor(context).withValues(alpha: 0.5))),
+            child: Center(child: Text(number, style: GoogleFonts.cinzel(color: AppTheme.goldColor(context), fontSize: 11, fontWeight: FontWeight.bold))),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: GoogleFonts.crimsonText(color: AppTheme.textPrimaryColor(context), fontSize: 15, height: 1.4))),
+        ],
+      ),
+    );
+  }
+
+
   Future<void> _exportBackup(AppLocalizations l) async {
     final success = await _backup.exportBackup();
     if (mounted) {
@@ -432,6 +487,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: GoogleFonts.crimsonText(
                             color: AppTheme.textSecondaryColor(context), fontSize: 13, height: 1.5),
                         textAlign: TextAlign.center),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => _showApiKeyGuide(l),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.help_outline, color: AppTheme.goldColor(context), size: 16),
+                        const SizedBox(width: 6),
+                        Text(l.apiKeyGuide,
+                            style: GoogleFonts.cinzel(
+                                color: AppTheme.goldColor(context),
+                                fontSize: 13,
+                                decoration: TextDecoration.underline,
+                                decorationColor: AppTheme.neonGold)),
+                      ],
+                    ),
                   ),
                 ],
               ),

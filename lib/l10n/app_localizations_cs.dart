@@ -552,16 +552,16 @@ class AppLocalizationsCs extends AppLocalizations {
   String get apiKeyStep1 => 'Otevři console.anthropic.com (tlačítko níže)';
 
   @override
-  String get apiKeyStep2 => 'Zaregistruj se nebo přihlas pomocí e-mailu';
+  String get apiKeyStep2 => 'Zaregistruj se pomocí e-mailu nebo Google účtu.';
 
   @override
-  String get apiKeyStep3 => 'V levém menu klikni na \"API Keys\"';
+  String get apiKeyStep3 => 'Vyber kredit (5 USD). Vyplň jméno a adresu, poté údaje platební karty. Klikni na \"Buy Credits\".';
 
   @override
-  String get apiKeyStep4 => 'Klikni na \"Create Key\" a pojmenuj ho (např. BibleDay)';
+  String get apiKeyStep4 => 'Na další stránce přeskoč automatické dobíjení tlačítkem \"Skip for now\".';
 
   @override
-  String get apiKeyStep5 => 'Zkopíruj klíč (začíná \"sk-ant-...\") a vlož ho do BibleDay';
+  String get apiKeyStep5 => 'Vpravo nahoře klikni na \"Get API Key\".';
 
   @override
   String get apiKeyGuideTip => '💡 Tip: Vlož 5 USD kredit pro začátek — vydrží na více než 4 roky denního studia!';
@@ -612,5 +612,5 @@ class AppLocalizationsCs extends AppLocalizations {
   String get ttsInfoDesc => 'Kvalita českého hlasu závisí na TTS enginu vašeho telefonu.';
 
   @override
-  String get apiKeyStep6 => 'Klikni na Create Key, pojmenuj ho BibleDay a zkopíruj klíč.';
+  String get apiKeyStep6 => 'Klikni na \"Create Key\", pojmenuj ho BibleDay a zkopíruj klíč začínající \"sk-ant-...\".';
 }

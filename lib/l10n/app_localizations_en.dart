@@ -552,16 +552,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apiKeyStep1 => 'Open console.anthropic.com (button below)';
 
   @override
-  String get apiKeyStep2 => 'Sign up or log in with your email';
+  String get apiKeyStep2 => 'Sign up using your email or Google account.';
 
   @override
-  String get apiKeyStep3 => 'Click \"API Keys\" in the left menu';
+  String get apiKeyStep3 => 'Select a credit amount (\$5). Fill in your name and address, then your payment card details. Click \"Buy Credits\".';
 
   @override
-  String get apiKeyStep4 => 'Click \"Create Key\" and name it (e.g. BibleDay)';
+  String get apiKeyStep4 => 'On the next page, skip automatic reloading by clicking \"Skip for now\".';
 
   @override
-  String get apiKeyStep5 => 'Copy the key (starts with \"sk-ant-...\") and paste it into BibleDay';
+  String get apiKeyStep5 => 'In the top right corner, click \"Get API Key\".';
 
   @override
   String get apiKeyGuideTip => '💡 Tip: Add \$5 credit to start — it lasts over 4 years of daily study!';
@@ -612,5 +612,5 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ttsInfoDesc => 'Voice quality depends on the TTS engine on your phone.';
 
   @override
-  String get apiKeyStep6 => 'Click Create Key, name it BibleDay and copy the key.';
+  String get apiKeyStep6 => 'Click \"Create Key\", name it BibleDay and copy the key starting with \"sk-ant-...\".';
 }

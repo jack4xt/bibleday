@@ -1184,25 +1184,25 @@ abstract class AppLocalizations {
   /// No description provided for @apiKeyStep2.
   ///
   /// In en, this message translates to:
-  /// **'Sign up or log in with your email'**
+  /// **'Sign up using your email or Google account.'**
   String get apiKeyStep2;
 
   /// No description provided for @apiKeyStep3.
   ///
   /// In en, this message translates to:
-  /// **'Click \"API Keys\" in the left menu'**
+  /// **'Select a credit amount (\$5). Fill in your name and address, then your payment card details. Click \"Buy Credits\".'**
   String get apiKeyStep3;
 
   /// No description provided for @apiKeyStep4.
   ///
   /// In en, this message translates to:
-  /// **'Click \"Create Key\" and name it (e.g. BibleDay)'**
+  /// **'On the next page, skip automatic reloading by clicking \"Skip for now\".'**
   String get apiKeyStep4;
 
   /// No description provided for @apiKeyStep5.
   ///
   /// In en, this message translates to:
-  /// **'Copy the key (starts with \"sk-ant-...\") and paste it into BibleDay'**
+  /// **'In the top right corner, click \"Get API Key\".'**
   String get apiKeyStep5;
 
   /// No description provided for @apiKeyGuideTip.
@@ -1304,7 +1304,7 @@ abstract class AppLocalizations {
   /// No description provided for @apiKeyStep6.
   ///
   /// In en, this message translates to:
-  /// **'Click Create Key, name it BibleDay and copy the key.'**
+  /// **'Click \"Create Key\", name it BibleDay and copy the key starting with \"sk-ant-...\".'**
   String get apiKeyStep6;
 }
 

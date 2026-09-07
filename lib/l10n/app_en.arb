@@ -181,10 +181,10 @@
   "apiKeyGuide": "How to get an API key?",
   "apiKeyGuideIntro": "The API key connects BibleDay to Claude AI. You can get it for free on the Anthropic website.",
   "apiKeyStep1": "Open console.anthropic.com (button below)",
-  "apiKeyStep2": "Sign up or log in with your email",
-  "apiKeyStep3": "Click \"API Keys\" in the left menu",
-  "apiKeyStep4": "Click \"Create Key\" and name it (e.g. BibleDay)",
-  "apiKeyStep5": "Copy the key (starts with \"sk-ant-...\") and paste it into BibleDay",
+  "apiKeyStep2": "Sign up using your email or Google account.",
+  "apiKeyStep3": "Select a credit amount ($5). Fill in your name and address, then your payment card details. Click \"Buy Credits\".",
+  "apiKeyStep4": "On the next page, skip automatic reloading by clicking \"Skip for now\".",
+  "apiKeyStep5": "In the top right corner, click \"Get API Key\".",
   "apiKeyGuideTip": "💡 Tip: Add $5 credit to start — it lasts over 4 years of daily study!",
   "apiKeyOpenConsole": "Open Anthropic",
   "shareVerse": "Share verse",
@@ -201,5 +201,5 @@
   "assistantHint": "Type your question...",
   "ttsInfoTitle": "Bible Reading",
   "ttsInfoDesc": "Voice quality depends on the TTS engine on your phone.",
-  "apiKeyStep6": "Click Create Key, name it BibleDay and copy the key."
+  "apiKeyStep6": "Click \"Create Key\", name it BibleDay and copy the key starting with \"sk-ant-...\"."
 }
